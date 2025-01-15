@@ -1,0 +1,572 @@
+
+
+// Get the canvas element from the DOM
+const canvas = document.getElementById("canvas");
+// Set the width of the canvas to the inner width of the window minus 60px
+canvas.width = window.innerWidth - 60;
+// Set the height of the canvas to 400px
+canvas.height = 400;
+
+// The code uses the Canvas API (getContext("2d")) to draw lines, shapes, and manage the drawing state. This API is only available on <canvas> elements.
+let context = canvas.getContext("2d");
+
+// Set the starting background color of the canvas to white
+let start_background_color = "white";
+// Fill the entire canvas with the starting background color (white)
+context.fillStyle = start_background_color;
+
+// Fill the canvas with the starting background color
+context.fillRect(0, 0, canvas.width, canvas.height);
+
+// Set the default drawing color to black
+let draw_color = "black";
+// Set the default line width for drawing to 2px
+let draw_width = "2";
+// Flag to track if the user is currently drawing
+let is_drawing = false;
+// Flag to track if the eraser is active
+let is_eraser = false;
+
+// Array to store canvas states for undo functionality
+let restore_array = [];
+// Index to keep track of the current state in the undo history
+let index = -1;
+
+let undoStack = JSON.parse(localStorage.getItem('undoStack'))||[];
+let redoStack = JSON.parse(localStorage.getItem('redoStack'))||[];
+
+// function updateLocalStorage(){
+//     localStorage.setItem('undoStack',JSON.stringify(
+//     localStorage.setItem('undoStack',JSON.stringyfy(undoStack));
+// }
+
+
+function updateLocalStorage() {
+    localStorage.setItem('undoStack', JSON.stringify(undoStack));
+    localStorage.setItem('redoStack', JSON.stringify(redoStack));
+}
+
+// Function to change the drawing color when a user clicks on a color button
+function change_color(element) {
+    // Set the draw color to the background color of the clicked element
+    draw_color = element.style.background;
+}
+
+// Add event listeners for touch and mouse events to handle drawing actions
+canvas.addEventListener("touchstart", start, false); // Start drawing on touch start
+canvas.addEventListener("touchmove", draw, false); // Draw while moving the touch
+canvas.addEventListener("mousedown", start, false); // Start drawing on mouse down
+canvas.addEventListener("mousemove", draw, false); // Draw while moving the mouse
+
+// Add event listeners to stop drawing on touch and mouse events
+canvas.addEventListener("touchend", stop, false); // Stop drawing on touch end
+canvas.addEventListener("mouseup", stop, false); // Stop drawing on mouse up
+canvas.addEventListener("mouseout", stop, false); // Stop drawing if mouse leaves the canvas
+
+// Function to start the drawing when the mouse/touch begins
+function start(event) {
+    // Set the is_drawing flag to true (indicating drawing has started)
+    is_drawing = true;
+    // Begin a new path for drawing
+    context.beginPath(); // Start a new path (so lines don't overlap previous ones)
+    // Move the drawing position to where the user clicked or touched
+    context.moveTo(event.clientX - canvas.offsetLeft, event.clientY - canvas.offsetTop);
+    // Prevent default behavior for the event (e.g., prevent text selection)
+    event.preventDefault();
+}
+
+// Function to toggle the eraser mode
+function toggleErase() {
+    is_eraser = !is_eraser;
+    if (is_eraser) {
+        draw_color = start_background_color;  // Set the color to the background color (for erasing)
+        document.getElementById('eraseButton').textContent = 'Draw';  // Change button text to 'Draw'
+    } else {
+        draw_color = "black";  // Revert to the default drawing color
+        document.getElementById('eraseButton').textContent = 'Erase';  // Change button text to 'Erase'
+    }
+}
+
+// Function to handle the drawing while the mouse/touch moves
+function draw(event) {
+    if (is_drawing) {
+        context.lineTo(event.clientX - canvas.offsetLeft, event.clientY - canvas.offsetTop);
+        context.strokeStyle = draw_color;
+        context.lineWidth = draw_width;
+        context.lineCap = "round";
+        context.lineJoin = "round";
+        context.stroke();  
+    }
+    event.preventDefault();
+}
+
+// Function to stop drawing when the mouse/touch ends
+function stop(event) {
+    // If the user was drawing
+    if (is_drawing) {
+        // Finish the current stroke (line)
+        context.stroke();
+        // Close the current path to prevent unintended lines
+        context.closePath();
+        // Set the is_drawing flag to false (drawing stopped)
+        is_drawing = false;
+    }
+    // Prevent default behavior
+    event.preventDefault();
+
+    // If the event type is not 'mouseout' (the mouse leaving the canvas)
+    if (event.type != 'mouseout') {
+        // Save the current canvas state to the restore array for undo functionality
+        restore_array.push(context.getImageData(0, 0, canvas.width, canvas.height));
+        // Increment the index (moving forward in the undo history)
+        index += 1;
+    }
+
+    // Log the restore array (for debugging purposes)
+    console.log(restore_array);
+}
+
+// Function to clear the canvas (e.g., when the user clicks the 'Clear' button)
+function clear_canvas() {
+    // Set the fill color to the starting background color
+    context.fillStyle = start_background_color;
+    // Clear the entire canvas area (remove everything)
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    // Fill the canvas with the starting background color again (white)
+    context.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Clear the restore array and reset the index (empty the undo history)
+    restore_array = [];
+    index = -1;
+}
+
+// Function to undo the last drawing action (e.g., when the user clicks the 'Undo' button)
+function undo_last() {
+    // If there are no actions in the restore array (index <= 0), clear the canvas
+    if (index <= 0) {
+        clear_canvas();
+    } else {
+        // Decrement the index (move back in the undo history)
+        index -= 1;
+        // Remove the last saved canvas state from the restore array
+        restore_array.pop();
+        // Restore the canvas to the previous state
+        context.putImageData(restore_array[index], 0, 0);
+    }
+}
+
+
+// Function to handle the download functionality
+function downloadCanvas() {
+    // Create a temporary anchor (<a>) element
+    let downloadLink = document.createElement('a');
+    
+    // Set the download attribute with the desired filename
+    downloadLink.download = 'canvas_image.png';
+    
+    // Get the canvas image data URL in PNG format
+    downloadLink.href = canvas.toDataURL('image/png');
+    
+    console.log(downloadLink.href,"aa" );
+    
+    // Programmatically trigger a click on the anchor element to start the download
+    downloadLink.click();
+}
+
+
+
+// Function to save the current canvas state to localStorage
+function saveToLocalStorage() {
+    // Get the canvas data URL in PNG format
+    let canvasData = canvas.toDataURL('image/png');
+    
+    // Save the canvas data URL to localStorage (using a key)
+    localStorage.setItem('canvasImage', canvasData);
+    
+    alert("Canvas saved to localStorage.");
+}
+
+
+
+// Function to load the saved canvas state from localStorage
+function loadFromLocalStorage() {
+    // Get the saved canvas data URL from localStorage
+    let savedCanvasData = localStorage.getItem('canvasImage');
+    
+    if (savedCanvasData) {
+        // Create a new image element
+        let img = new Image();
+        
+        // Set the image source to the saved canvas data URL
+        img.src = savedCanvasData;
+        
+        // Once the image is loaded, draw it onto the canvas
+        img.onload = function() {
+            context.clearRect(0, 0, canvas.width, canvas.height);  // Clear the canvas first
+            context.drawImage(img, 0, 0);  // Draw the image on the canvas
+        };
+        
+        alert("Canvas loaded from localStorage.");
+    } else {
+        alert("No saved canvas found in localStorage.");
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <link rel="shortcut icon" href="favicon.ico" type="image/ico" />
+    <link href="styles.css" type="text/css" rel="stylesheet" />
+    <script src="https://code.jquery.com/jquery-3.3.1.js"
+        integrity="sha256-2Kfd9ahz42cQfpE4aLrZ9lD2dNlaxjepBxRFx4pK2+o=" crossorigin="anonymous">
+        </script>
+
+</head>
+
+<body>
+
+    <div class="field">
+        <canvas id="canvas"></canvas>
+        <div class="tools">
+            <button onClick="undo_last()" type="button" class="button">Undo</button>
+            <button onClick="clear_canvas()" type="button" class="button">Clear</button>
+            <button onClick="toggleErase()" type="button" class="button" id="eraseButton">Erase</button>
+            <button onClick="downloadCanvas()" type="button" class="button" id="eraseButton">Download</button>
+            <button onClick="saveToLocalStorage()" type="button" class="button">Save to Local Storage</button>
+            <button onClick="loadFromLocalStorage()" type="button" class="button">Load from Local Storage</button>
+
+
+            <div onclick="change_color(this)" class="color-field" style="background:red;"></div>
+            <div onclick="change_color(this)" class="color-field" style="background:blue;"></div>
+            <div onclick="change_color(this)" class="color-field" style="background:green;"></div>
+            <div onclick="change_color(this)" class="color-field" style="background:yellow;"></div>
+
+            <input onInput="draw_color=this.value" type="color" class="color-picker">
+            <input type="range" min="1" max="100" class="pen-range" onInput="draw_width=this.value">
+
+
+
+        </div>
+    </div>
+
+</body>
+<script src="main.js"></script>
+
+</html>
+
+usefonteawesome link for Save to Local Storage and Load from Local Storage 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// Function to load the saved canvas state from localStorage
+function loadFromLocalStorage() {
+    // Get the saved canvas data URL from localStorage
+    let savedCanvasData = localStorage.getItem('canvasImage');
+    
+    if (savedCanvasData) {
+        // Create a new image element
+        let img = new Image();
+        
+        // Set the image source to the saved canvas data URL
+        img.src = savedCanvasData;
+        
+        // Once the image is loaded, draw it onto the canvas
+        img.onload = function() {
+            // Reset the canvas size to the original size before loading
+            canvas.width = window.innerWidth - 60;  // Set to the original canvas width
+            canvas.height = 400;  // Set to the original canvas height
+
+            // Clear the canvas first
+            context.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw the loaded image onto the canvas
+            context.drawImage(img, 0, 0);
+
+            // Optionally, you can save the new state of the canvas to localStorage after loading
+            updateLocalStorage();
+        };
+        
+        alert("Canvas loaded from localStorage.");
+    } else {
+        alert("No saved canvas found in localStorage.");
+    }
+}
+
+
+
+
+
+
+function loadFromLocalStorage() {
+    // Get the saved canvas data URL from localStorage
+    let savedCanvasData = localStorage.getItem('canvasImage');
+    
+    if (savedCanvasData) {
+        // Create a new image element
+        let img = new Image();
+        
+        // Set the image source to the saved canvas data URL
+        img.src = savedCanvasData;
+        
+        // Once the image is loaded, draw it onto the canvas
+        img.onload = function() {
+            // Set the canvas size before drawing the image to ensure it fits the full width
+            canvas.width = window.innerWidth - 60;  // Set to the original canvas width
+            canvas.height = 400;  // Set to the original canvas height
+            
+            // Clear the canvas first to avoid drawing over anything
+            context.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw the image on the resized canvas
+            context.drawImage(img, 0, 0, canvas.width, canvas.height);  // Fit the image to canvas size
+
+            // Optionally, save the current state again to localStorage (if needed)
+            updateLocalStorage();
+        };
+        
+        alert("Canvas loaded from localStorage.");
+    } else {
+        alert("No saved canvas found in localStorage.");
+
+    }
+}
+
+Load button is working fine just i want after loading from local storage i can able to make undo also on that image so give code accordingly i think json.parse and json.string will be required
+make changes according to this 
+let undoStack = JSON.parse(localStorage.getItem('undoStack')) || [];
+let redoStack = JSON.parse(localStorage.getItem('redoStack')) || [];
+
+
+function updateLocalStorage() {
+    localStorage.setItem('undoStack', JSON.stringify(undoStack));
+    localStorage.setItem('redoStack', JSON.stringify(redoStack));
+}
+
+function undo() {
+    if (undoStack.length > 0) {
+        const lastState = undoStack.pop();
+        redoStack.push(canvas.toDataURL());
+        const img = new Image();
+        img.src = lastState;
+        img.onload = () => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear the canvas before redrawing
+            ctx.drawImage(img, 0, 0);
+            updateLocalStorage();
+        };
+    }
+}
+
+function redo() {
+    if (redoStack.length > 0) {
+        const nextState = redoStack.pop();
+        undoStack.push(canvas.toDataURL()); // toDataURL()  method returns a data URL containing a representation of the image
+        const img = new Image();
+        img.src = nextState;
+        img.onload = () => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear the canvas before redrawing
+            ctx.drawImage(img, 0, 0);
+            updateLocalStorage();
+        };
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// Function to update LocalStorage
+function updateLocalStorage() {
+    localStorage.setItem('undoStack', JSON.stringify(undoStack));
+    localStorage.setItem('redoStack', JSON.stringify(redoStack));
+}
+
+// Function to undo the last drawing action
+function undo() {
+    if (undoStack.length > 0) {
+        const lastState = undoStack.pop();
+        redoStack.push(canvas.toDataURL());
+        
+        const img = new Image();
+        img.src = lastState;
+        img.onload = () => {
+            context.clearRect(0, 0, canvas.width, canvas.height); // Clear the canvas before redrawing
+            context.drawImage(img, 0, 0);
+            updateLocalStorage();
+        };
+    }
+}
+
+// Function to redo the last undone drawing action
+function redo() {
+    if (redoStack.length > 0) {
+        const nextState = redoStack.pop();
+        undoStack.push(canvas.toDataURL()); // Save current canvas state in undo stack
+        
+        const img = new Image();
+        img.src = nextState;
+        img.onload = () => {
+            context.clearRect(0, 0, canvas.width, canvas.height); // Clear the canvas before redrawing
+            context.drawImage(img, 0, 0);
+            updateLocalStorage();
+        };
+    }
+}
+
+// Function to load the saved canvas state from localStorage
+function loadFromLocalStorage() {
+    // Get the saved canvas data URL from localStorage
+    let savedCanvasData = localStorage.getItem('canvasImage');
+    
+    if (savedCanvasData) {
+        // Create a new image element
+        let img = new Image();
+        
+        // Set the image source to the saved canvas data URL
+        img.src = savedCanvasData;
+        
+        // Once the image is loaded, draw it onto the canvas
+        img.onload = function() {
+
+            canvas.width = window.innerWidth - 60;  // Set to the original canvas width
+            canvas.height = 400;  // Set to the original canvas height
+            context.clearRect(0, 0, canvas.width, canvas.height);  // Clear the canvas first
+            context.drawImage(img, 0, 0, canvas.width, canvas.height);  // Draw the image on the canvas
+
+            // After loading the image, we want to add the current canvas state to the undo stack
+            undoStack = []; // Clear previous undo stack as we're loading new content
+            redoStack = []; // Clear redo stack
+            undoStack.push(canvas.toDataURL()); // Save the current image state
+            updateLocalStorage(); // Update localStorage with new undo and redo stacks
+
+            alert("Canvas loaded from localStorage.");
+        };
+        
+    } else {
+        alert("No saved canvas found in localStorage.");
+    }
+}
+
+// Function to save the current canvas state to localStorage
+function saveToLocalStorage() {
+    // Get the canvas data URL in PNG format
+    let canvasData = canvas.toDataURL('image/png');
+    
+    // Save the canvas data URL to localStorage (using a key)
+    localStorage.setItem('canvasImage', canvasData);
+
+    // Also, save the current state in undoStack
+    undoStack.push(canvasData);  // Save the current state to undoStack
+
+    // Update localStorage with undo and redo stacks
+    updateLocalStorage();
+
+    alert("Canvas saved to localStorage.");
+}
